@@ -74,8 +74,8 @@ agent-verifier/
 ### 1. Clone the repo
 
 ```powershell
-git clone https://github.com/your-username/agent-verifier.git
-cd agent-verifier
+git clone https://github.com/manas-sidnal/verdikt.git
+cd verdikt
 ```
 
 ### 2. Set up the Python virtual environment
