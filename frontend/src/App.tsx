@@ -1,7 +1,7 @@
-
 import { useState } from 'react'
 import {
   Activity,
+  AlertCircle,
   ArrowUpRight,
   Check,
   ChevronDown,
@@ -10,6 +10,7 @@ import {
   FlaskConical,
   GitBranch,
   Layers3,
+  Loader2,
   Plus,
   ShieldCheck,
   Sparkles,
@@ -18,14 +19,74 @@ import {
 } from 'lucide-react'
 import './App.css'
 
-type StageStatus = 'ready' | 'pending'
+// ---------------------------------------------------------------------------
+// API
+// ---------------------------------------------------------------------------
+
+const API_BASE = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? 'http://127.0.0.1:8000'
+
+interface PlanCheck {
+  id: string
+  description: string
+}
+
+interface Plan {
+  claim: string
+  checks: PlanCheck[]
+}
+
+interface Evidence {
+  check_id: string
+  passed: boolean
+  exit_code: number
+  tests_ran: boolean
+  stdout: string
+  stderr: string
+  evidence_source: string
+}
+
+type Verdict = 'VERIFIED' | 'CONTRADICTED' | 'INSUFFICIENT EVIDENCE'
+
+interface VerificationResult {
+  claim: string
+  plan: Plan
+  evidence: Evidence
+  verdict: Verdict
+}
+
+async function runVerification(claim: string): Promise<VerificationResult> {
+  const response = await fetch(`${API_BASE}/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ claim }),
+  })
+
+  if (!response.ok) {
+    if (response.status === 422) {
+      throw new Error('Claim is too short, too long, or otherwise invalid.')
+    }
+    throw new Error(`Verification failed (HTTP ${response.status}). Check the API server logs.`)
+  }
+
+  return response.json() as Promise<VerificationResult>
+}
+
+// ---------------------------------------------------------------------------
+// Verdict badge helpers
+// ---------------------------------------------------------------------------
+
+type AppState =
+  | { phase: 'idle' }
+  | { phase: 'loading' }
+  | { phase: 'success'; result: VerificationResult }
+  | { phase: 'error'; message: string }
 
 const stages: {
   number: string
   title: string
   description: string
   source: string
-  status: StageStatus
+  status: 'ready' | 'pending'
   icon: typeof ShieldCheck
 }[] = [
   {
@@ -62,20 +123,118 @@ const stages: {
   },
 ]
 
+// ---------------------------------------------------------------------------
+// Verdict display component
+// ---------------------------------------------------------------------------
+
+function VerdictBadge({ verdict }: { verdict: Verdict }) {
+  const map: Record<Verdict, { label: string; className: string }> = {
+    VERIFIED: { label: 'VERIFIED', className: 'verdict-badge verdict-verified' },
+    CONTRADICTED: { label: 'CONTRADICTED', className: 'verdict-badge verdict-contradicted' },
+    'INSUFFICIENT EVIDENCE': { label: 'INSUFFICIENT EVIDENCE', className: 'verdict-badge verdict-insufficient' },
+  }
+  const { label, className } = map[verdict]
+  return <span className={className}>{label}</span>
+}
+
+function ResultPanel({ result }: { result: VerificationResult }) {
+  return (
+    <div className="result-panel" role="region" aria-label="Verification result">
+      <div className="result-header">
+        <div className="result-header-left">
+          <div className="section-kicker">VERIFICATION RESULT</div>
+          <h2>Evidence-based verdict</h2>
+        </div>
+        <VerdictBadge verdict={result.verdict} />
+      </div>
+
+      {/* Prototype scope note */}
+      <div className="prototype-note" role="note">
+        <AlertCircle size={13} />
+        <span>
+          <strong>Prototype scope:</strong> The current evidence check tests local login
+          behaviour only. It does not independently verify a real deployment.
+          Deployment evidence is always absent, so the verdict will be{' '}
+          <em>INSUFFICIENT EVIDENCE</em> unless the login tests fail.
+        </span>
+      </div>
+
+      {/* Claim */}
+      <div className="result-section">
+        <div className="result-section-label">CLAIM SUBMITTED</div>
+        <p className="result-claim">{result.claim}</p>
+      </div>
+
+      {/* Plan */}
+      <div className="result-section">
+        <div className="result-section-label">VERIFICATION PLAN · {result.plan.checks.length} checks</div>
+        <ul className="plan-checks">
+          {result.plan.checks.map((check) => (
+            <li key={check.id} className="plan-check">
+              <span className="check-id">{check.id}</span>
+              <span className="check-desc">{check.description}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Evidence */}
+      <div className="result-section">
+        <div className="result-section-label">EVIDENCE · {result.evidence.evidence_source}</div>
+        <div className="evidence-grid">
+          <div className="evidence-row">
+            <span className="evidence-key">Check</span>
+            <span className="evidence-val">{result.evidence.check_id}</span>
+          </div>
+          <div className="evidence-row">
+            <span className="evidence-key">Tests ran</span>
+            <span className="evidence-val">{result.evidence.tests_ran ? 'Yes' : 'No'}</span>
+          </div>
+          <div className="evidence-row">
+            <span className="evidence-key">Passed</span>
+            <span className={`evidence-val ${result.evidence.passed ? 'ev-pass' : 'ev-fail'}`}>
+              {result.evidence.passed ? 'Yes' : 'No'}
+            </span>
+          </div>
+          <div className="evidence-row">
+            <span className="evidence-key">Exit code</span>
+            <span className="evidence-val evidence-mono">{result.evidence.exit_code}</span>
+          </div>
+        </div>
+        {result.evidence.stdout && (
+          <pre className="evidence-output">{result.evidence.stdout.trim()}</pre>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// App
+// ---------------------------------------------------------------------------
+
 function App() {
   const [claim, setClaim] = useState('')
   const [notice, setNotice] = useState('')
   const [showHelp, setShowHelp] = useState(false)
+  const [appState, setAppState] = useState<AppState>({ phase: 'idle' })
 
-  function handleSubmit() {
+  const isLoading = appState.phase === 'loading'
+
+  async function handleSubmit() {
     if (!claim.trim()) {
-      setNotice('Enter a claim to prepare a verification run.')
+      setNotice('Enter a claim to start verification.')
       return
     }
-
-    setNotice(
-      'Preview only — verification is not connected to the frontend yet. Your claim has not been submitted to the backend.',
-    )
+    setNotice('')
+    setAppState({ phase: 'loading' })
+    try {
+      const result = await runVerification(claim.trim())
+      setAppState({ phase: 'success', result })
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'An unexpected error occurred.'
+      setAppState({ phase: 'error', message })
+    }
   }
 
   return (
@@ -120,10 +279,10 @@ function App() {
 
         <div className="sidebar-bottom">
           <div className="connection-card">
-            <span className="connection-dot" />
+            <span className="connection-dot connected" />
             <div>
               <strong>Local prototype</strong>
-              <small>Backend integration pending</small>
+              <small>Backend connected · {API_BASE}</small>
             </div>
           </div>
           <button className="nav-item help-item" onClick={() => setShowHelp(!showHelp)}>
@@ -178,9 +337,13 @@ function App() {
             <textarea
               id="claim-input"
               value={claim}
+              disabled={isLoading}
               onChange={(event) => {
                 setClaim(event.target.value)
                 setNotice('')
+                if (appState.phase !== 'idle' && appState.phase !== 'loading') {
+                  setAppState({ phase: 'idle' })
+                }
               }}
               placeholder="e.g. The login bug is fixed and the deployment is successful."
               rows={4}
@@ -188,16 +351,18 @@ function App() {
 
             <div className="input-meta">
               <span>Be specific. Claims should be testable.</span>
-              <span>{claim.length} characters</span>
+              <span>{claim.length} / 2000 characters</span>
             </div>
 
             <div className="example-row">
               <span className="example-label">TRY AN EXAMPLE</span>
               <button
                 className="example-chip"
+                disabled={isLoading}
                 onClick={() => {
                   setClaim('The login bug is fixed and the deployment is successful.')
                   setNotice('')
+                  setAppState({ phase: 'idle' })
                 }}
               >
                 Login fix + deployment <ArrowUpRight size={13} />
@@ -206,13 +371,47 @@ function App() {
 
             {notice && <div className="notice" role="status">{notice}</div>}
 
+            {appState.phase === 'error' && (
+              <div className="notice notice-error" role="alert">
+                <AlertCircle size={13} />
+                {appState.message}
+              </div>
+            )}
+
             <div className="form-footer">
-              <span className="privacy-note"><ShieldCheck size={14} /> No verification runs until you start one.</span>
-              <button className="primary-button" onClick={handleSubmit}>
-                Prepare verification <ArrowUpRight size={16} />
+              <span className="privacy-note">
+                <ShieldCheck size={14} />
+                {isLoading
+                  ? 'Running verification — please wait…'
+                  : appState.phase === 'success'
+                  ? 'Verification complete. Edit the claim to run again.'
+                  : 'No verification runs until you start one.'}
+              </span>
+              <button
+                className="primary-button"
+                id="verify-submit-btn"
+                onClick={handleSubmit}
+                disabled={isLoading}
+                aria-busy={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 size={15} className="spin" />
+                    Verifying…
+                  </>
+                ) : (
+                  <>
+                    {appState.phase === 'success' ? <Check size={15} /> : <ArrowUpRight size={16} />}
+                    {appState.phase === 'success' ? 'Verify again' : 'Start verification'}
+                  </>
+                )}
               </button>
             </div>
           </section>
+
+          {appState.phase === 'success' && (
+            <ResultPanel result={appState.result} />
+          )}
 
           <section className="pipeline-section">
             <div className="pipeline-heading">

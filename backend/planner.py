@@ -4,7 +4,7 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from verification_plan import validate_plan, validate_bug_fix_plan
+from backend.verification_plan import validate_plan, validate_bug_fix_plan
 
 load_dotenv()
 

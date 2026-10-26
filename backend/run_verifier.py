@@ -1,8 +1,8 @@
 from pprint import pprint
 
-from planner import create_verification_plan
-from evidence_collector import run_login_test
-from verdict_engine import evaluate_verdict
+from backend.planner import create_verification_plan
+from backend.evidence_collector import run_login_test
+from backend.verdict_engine import evaluate_verdict
 
 
 def verify_login_fix(claim, deployment_succeeded=None):

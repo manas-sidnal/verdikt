@@ -865,3 +865,212 @@ button:disabled {
     animation-iteration-count: 1 !important;
   }
 }
+
+/* ---- Connection dot states ---- */
+.connection-dot.connected {
+  background: var(--accent);
+  box-shadow: 0 0 9px rgba(200, 241, 105, 0.3);
+}
+
+/* ---- Spinner animation ---- */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+.spin {
+  animation: spin 0.8s linear infinite;
+}
+
+/* ---- Error notice variant ---- */
+.notice-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  border-color: rgba(255, 100, 100, 0.25);
+  background: rgba(255, 60, 60, 0.06);
+  color: #f08080;
+}
+.notice-error svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+/* ---- Verdict badges ---- */
+.verdict-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 11px;
+  border-radius: 6px;
+  font: 600 10px var(--mono);
+  letter-spacing: 0.8px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.verdict-verified {
+  border: 1px solid rgba(200, 241, 105, 0.35);
+  background: rgba(200, 241, 105, 0.1);
+  color: #c8f169;
+}
+.verdict-contradicted {
+  border: 1px solid rgba(255, 100, 80, 0.3);
+  background: rgba(255, 60, 60, 0.08);
+  color: #f08070;
+}
+.verdict-insufficient {
+  border: 1px solid rgba(231, 184, 107, 0.3);
+  background: rgba(231, 184, 107, 0.07);
+  color: #d9b96a;
+}
+
+/* ---- Result panel ---- */
+.result-panel {
+  position: relative;
+  margin-top: 24px;
+  padding: 25px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.105);
+  border-radius: 15px;
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.03), transparent 52%),
+    rgba(18, 21, 27, 0.82);
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.14), inset 0 1px rgba(255, 255, 255, 0.035);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+
+.result-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+.result-header-left .section-kicker {
+  margin-bottom: 6px;
+}
+.result-header-left h2 {
+  margin: 0;
+  font: 500 18px var(--display);
+  letter-spacing: -0.4px;
+}
+
+/* ---- Prototype scope note ---- */
+.prototype-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin-bottom: 20px;
+  padding: 11px 13px;
+  border: 1px solid rgba(231, 184, 107, 0.18);
+  border-radius: 8px;
+  background: rgba(231, 184, 107, 0.04);
+  color: #b8a882;
+  font-size: 10.5px;
+  line-height: 1.65;
+}
+.prototype-note svg {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: #c9a85c;
+}
+.prototype-note strong {
+  font-weight: 600;
+  color: #c9a85c;
+}
+.prototype-note em {
+  font-style: normal;
+  color: #d9b96a;
+}
+
+/* ---- Result sections ---- */
+.result-section {
+  margin-bottom: 22px;
+}
+.result-section:last-child {
+  margin-bottom: 0;
+}
+.result-section-label {
+  margin-bottom: 10px;
+  color: #9da4af;
+  font: 500 9px var(--mono);
+  letter-spacing: 1px;
+}
+.result-claim {
+  margin: 0;
+  color: #d8dce3;
+  font-size: 12.5px;
+  line-height: 1.7;
+}
+
+/* ---- Plan checks ---- */
+.plan-checks {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 8px;
+}
+.plan-check {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.018);
+}
+.check-id {
+  color: var(--accent);
+  font: 500 9px var(--mono);
+  letter-spacing: 0.7px;
+}
+.check-desc {
+  color: #a8afba;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+/* ---- Evidence grid ---- */
+.evidence-grid {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.evidence-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  font-size: 11px;
+}
+.evidence-key {
+  width: 80px;
+  flex-shrink: 0;
+  color: var(--muted);
+  font: 9px var(--mono);
+  letter-spacing: 0.5px;
+}
+.evidence-val {
+  color: #c8cdd5;
+}
+.evidence-mono {
+  font-family: var(--mono);
+}
+.ev-pass {
+  color: var(--accent);
+}
+.ev-fail {
+  color: #f08070;
+}
+.evidence-output {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: rgba(7, 9, 12, 0.5);
+  color: #9da5ae;
+  font: 10px var(--mono);
+  line-height: 1.7;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow: auto;
+  max-height: 220px;
+}

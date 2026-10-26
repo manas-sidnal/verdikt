@@ -3,10 +3,12 @@ import sys
 from pathlib import Path
 
 # Allow running from the project root or scripts/ directory
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "backend"))
+ROOT_DIR = Path(__file__).resolve().parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
 
 from pprint import pprint
-from planner import create_verification_plan
+from backend.planner import create_verification_plan
 
 claim = "I fixed the login bug and deployed the fix."
 
