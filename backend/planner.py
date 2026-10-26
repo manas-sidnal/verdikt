@@ -4,7 +4,12 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 
-from backend.verification_plan import validate_plan, validate_bug_fix_plan
+from backend.verification_plan import (
+    classify_claim,
+    validate_behavioral_plan,
+    validate_bug_fix_plan,
+    validate_plan,
+)
 
 load_dotenv()
 
@@ -94,6 +99,15 @@ Rules:
     except (json.JSONDecodeError, TypeError):
         raise ValueError("Nemotron did not return valid JSON")
 
-    validate_bug_fix_plan(plan)
+    # Choose the validator based on what kind of claim this is.
+    # Behavioral claims (login credential acceptance/rejection) only need
+    # the expected_behavior check — which has a real runner — so VERIFIED
+    # is genuinely reachable.
+    # Any broader claim (bug-fix, deployment) still requires all three checks.
+    claim_type = classify_claim(claim)
+    if claim_type == "behavioral":
+        validate_behavioral_plan(plan, expected_claim=claim)
+    else:
+        validate_bug_fix_plan(plan, expected_claim=claim)
 
     return plan
