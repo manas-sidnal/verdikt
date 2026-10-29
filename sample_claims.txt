@@ -1,0 +1,85 @@
+VERDIKT — SAMPLE CLAIMS
+=======================
+
+Use these one at a time in the Verdikt claim box. Expected verdicts assume the current demo login implementation and its three pytest checks are unchanged. The model-generated plan can affect the exact result, so treat this as a test checklist, not a guarantee.
+
+A. SUPPORTED LOGIN BEHAVIOR
+---------------------------
+Claim:
+The login function accepts valid credentials and rejects invalid credentials.
+
+Expected:
+VERIFIED — if the plan contains only the supported expected_behavior check and all three login tests pass.
+
+B. CLAIM THAT SHOULD BE CONTRADICTED
+------------------------------------
+Claim:
+The login function accepts invalid passwords.
+
+Expected:
+CONTRADICTED — if the login tests execute successfully and confirm invalid passwords are rejected.
+
+C. ANOTHER CONTRADICTED CLAIM
+-----------------------------
+Claim:
+The login function rejects valid credentials.
+
+Expected:
+CONTRADICTED — if the login tests execute successfully and confirm valid credentials are accepted.
+
+D. DEPLOYMENT CLAIM
+-------------------
+Claim:
+The application has been successfully deployed to production.
+
+Expected:
+INSUFFICIENT EVIDENCE — there is no genuine deployment-status runner yet.
+
+E. COMPOUND CLAIM: LOGIN + DEPLOYMENT
+-------------------------------------
+Claim:
+The login function accepts valid credentials and rejects invalid credentials, and deployment succeeded.
+
+Expected:
+INSUFFICIENT EVIDENCE — local login tests cannot prove deployment succeeded.
+
+F. BUG-FIX CLAIM
+----------------
+Claim:
+The login bug is fixed and the fix has been deployed.
+
+Expected:
+INSUFFICIENT EVIDENCE — bug-reproduction and deployment checks do not have real runners yet.
+
+G. UNRELATED AUTHENTICATION FEATURE
+-----------------------------------
+Claim:
+The authentication system correctly rejects expired access tokens.
+
+Expected:
+INSUFFICIENT EVIDENCE — the current demo tests do not test token expiration.
+
+H. UNRELATED FEATURE
+--------------------
+Claim:
+The signup flow prevents duplicate email addresses.
+
+Expected:
+INSUFFICIENT EVIDENCE — the current demo tests do not exercise signup or email uniqueness.
+
+I. AMBIGUOUS CLAIM
+------------------
+Claim:
+The authentication system is secure.
+
+Expected:
+INSUFFICIENT EVIDENCE — this is much broader than the implemented login behavior tests.
+
+INTERPRETING RESULTS
+====================
+- VERIFIED: every required check ran and supports the claim.
+- CONTRADICTED: successfully collected evidence directly conflicts with the claim.
+- INSUFFICIENT EVIDENCE: checks are missing, unsupported, invalid, or could not run.
+
+IMPORTANT:
+A timeout, exception, or test-runner/environment failure should not be interpreted as proof that the user's claim is false. If such a failure produces CONTRADICTED, record it as a bug to fix.

@@ -30,7 +30,7 @@ Agent claim → Verification plan (Nemotron) → Evidence collection (safe runne
 - **Broader Bug-Fix & Deployment Claims:**  
   Claims asserting deployments, bug fixes, releases, or production status require all three evidence checks (`deployment_status`, `bug_reproduction`, and `expected_behavior`). Because deployment and reproduction runners are not yet implemented, their evidence stubs return `passed: None` (`no_runner`), safely preserving **`INSUFFICIENT EVIDENCE`** and preventing false verification.
 - **Resilient Plan & API Error Handling:**  
-  Malformed JSON, model API timeouts, or model-generated plans missing required checks safely produce an explicit **`INSUFFICIENT EVIDENCE`** result with diagnostic telemetry rather than crashing with unhandled HTTP 500 errors. Lack of a plan is never treated as contradiction.
+  Malformed JSON, model API timeouts, runner execution timeouts, collection errors, or model-generated plans missing required checks safely produce an explicit **`INSUFFICIENT EVIDENCE`** result with diagnostic telemetry rather than crashing with unhandled HTTP 500 errors. Lack of a plan, an execution timeout, or a runner crash is never treated as a contradiction.
 
 ---
 
@@ -47,7 +47,7 @@ agent-verifier/
 │   ├── verification_plan.py    # Claim classification & plan schema validation
 │   ├── login_app.py            # Demo subject: a simple credential verification app
 │   ├── run_verifier.py         # End-to-end verification pipeline orchestrator
-│   └── tests/                  # Pytest test suite (97 tests covering all layers)
+│   └── tests/                  # Pytest test suite (110 tests covering all layers)
 │       ├── test_api.py
 │       ├── test_evidence_collector.py
 │       ├── test_login_behavior.py
@@ -66,6 +66,7 @@ agent-verifier/
 ├── scripts/                    # Developer utility scripts
 │   ├── try_planner.py
 │   └── try_evidence.py
+├── sample_claims.txt           # Test checklist of sample claims and expected verdicts
 ├── .env                        # Server credentials (gitignored — never commit)
 ├── .env.example                # Environment variable template
 ├── .gitignore
@@ -143,7 +144,7 @@ From the **repository root** with the virtual environment active:
 python -m pytest -v
 ```
 
-Expected output: **97 passed** covering API routing, plan validation, claim classification, evidence registry safety, and end-to-end verdict evaluation.
+Expected output: **110 passed** covering API routing, plan validation, claim classification, evidence registry safety, and end-to-end verdict evaluation.
 
 ---
 
@@ -256,7 +257,7 @@ Submit an agent claim for verification.
 
 - **Zero Arbitrary Execution:** Model-generated descriptions, code blocks, shell commands, URLs, or file paths are **never executed**. Only allowlisted check IDs dispatch to trusted Python runners registered in `CHECK_RUNNERS`.
 - **Strict Plan Correspondence:** The generated plan's claim must strictly match the user claim; mismatches prevent verification.
-- **Fail-Safe Verdicts:** Timeouts, runner exceptions, unsupported check IDs, or missing runners always yield `passed: None` or `passed: False` — never `True`.
+- **Fail-Safe Verdicts:** Timeouts, runner exceptions, collection errors, unsupported check IDs, or missing runners always yield `passed: None` (evaluating to `INSUFFICIENT EVIDENCE`) — never false passes (`True`) or false contradictions (`False`). Only authentic contradictory test assertions yield `passed: False` (`CONTRADICTED`).
 - **Credential Protection:** `NEBIUS_API_KEY` resides strictly on the backend server (`.env`) and is never leaked to the browser or frontend client builds.
 - **Safe Error Boundaries:** Model/API failures return structured `INSUFFICIENT EVIDENCE` results rather than unhandled HTTP 500 crashes.
 

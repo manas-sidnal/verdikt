@@ -25,12 +25,16 @@ def evaluate_evidence_list(evidence_list: list) -> str:
     """Evaluate a verdict from a list of evidence dicts.
 
     Verdict rules (applied in order):
-    1. If any evidence has ``passed is False``, the claim is CONTRADICTED.
-    2. If any evidence has ``passed is None`` (no runner / unsupported), or
-       the list is empty, there is INSUFFICIENT EVIDENCE.
-    3. Only if every item has ``passed is True`` is the claim VERIFIED.
+    1. If any evidence has ``passed is False`` (genuine contradiction),
+       the claim is CONTRADICTED.
+    2. If no genuine contradiction exists but required evidence is missing
+       or inconclusive (``passed is None``, unsupported check, timeout,
+       runner exception, collection error), or the list is empty, return
+       INSUFFICIENT EVIDENCE.
+    3. Return VERIFIED only when every required check has trustworthy
+       passing evidence (``passed is True``).
 
-    An unexecuted or unsupported check is never treated as passing.
+    An unexecuted, inconclusive, or unsupported check is never treated as passing.
 
     Args:
         evidence_list: A list of dicts as returned by collect_plan_evidence().
@@ -44,11 +48,11 @@ def evaluate_evidence_list(evidence_list: list) -> str:
         return "INSUFFICIENT EVIDENCE"
 
     for item in evidence_list:
-        if item.get("passed") is False:
+        if isinstance(item, dict) and item.get("passed") is False:
             return "CONTRADICTED"
 
     for item in evidence_list:
-        if item.get("passed") is not True:
+        if not isinstance(item, dict) or item.get("passed") is not True:
             return "INSUFFICIENT EVIDENCE"
 
     return "VERIFIED"

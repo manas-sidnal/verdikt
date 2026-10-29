@@ -159,3 +159,60 @@ def test_verify_model_api_failure_returns_200_and_insufficient_evidence():
     assert data["verdict"] == "INSUFFICIENT EVIDENCE"
     assert data["evidence"]["passed"] is None
 
+
+def test_verify_runner_timeout_returns_200_and_insufficient_evidence():
+    """A runner timeout must return 200 OK with INSUFFICIENT EVIDENCE, not CONTRADICTED or 500."""
+    import subprocess
+    behavioral_plan = {
+        "claim": "The login function accepts valid credentials and rejects invalid credentials.",
+        "checks": [{"id": "expected_behavior", "description": "Run login behavior tests."}],
+    }
+    def _timeout():
+        raise subprocess.TimeoutExpired(cmd=["pytest"], timeout=30)
+
+    with (
+        patch("backend.run_verifier.create_verification_plan", return_value=behavioral_plan),
+        patch("backend.evidence_collector.CHECK_RUNNERS", {"expected_behavior": _timeout}),
+    ):
+        response = client.post(
+            "/verify",
+            json={"claim": "The login function accepts valid credentials and rejects invalid credentials."},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["verdict"] == "INSUFFICIENT EVIDENCE"
+    assert data["evidence"]["passed"] is None
+    assert data["evidence"]["status"] == "timeout"
+
+
+def test_verify_collection_error_returns_200_and_insufficient_evidence():
+    """A pytest collection error must return 200 OK with INSUFFICIENT EVIDENCE, not CONTRADICTED or 500."""
+    behavioral_plan = {
+        "claim": "The login function accepts valid credentials and rejects invalid credentials.",
+        "checks": [{"id": "expected_behavior", "description": "Run login behavior tests."}],
+    }
+    collection_error_evidence = {
+        "check_id": "expected_behavior",
+        "passed": None,
+        "status": "collection_error",
+        "exit_code": 2,
+        "tests_ran": False,
+        "stdout": "ERROR collecting test_login_behavior.py",
+        "stderr": "",
+        "evidence_source": "pytest",
+    }
+    with (
+        patch("backend.run_verifier.create_verification_plan", return_value=behavioral_plan),
+        patch("backend.evidence_collector.CHECK_RUNNERS", {"expected_behavior": lambda: collection_error_evidence}),
+    ):
+        response = client.post(
+            "/verify",
+            json={"claim": "The login function accepts valid credentials and rejects invalid credentials."},
+        )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["verdict"] == "INSUFFICIENT EVIDENCE"
+    assert data["evidence"]["passed"] is None
+    assert data["evidence"]["status"] == "collection_error"
+
+

@@ -364,4 +364,73 @@ def test_no_unsupported_claim_can_reach_verified():
         assert result["verdict"] == "INSUFFICIENT EVIDENCE"
 
 
+def test_verifier_timeout_yields_insufficient_evidence_not_contradicted():
+    """A runner timeout in the verification pipeline produces INSUFFICIENT EVIDENCE, never CONTRADICTED."""
+    import subprocess
+    plan = {
+        "claim": "The login function accepts valid credentials and rejects invalid credentials.",
+        "checks": [{"id": "expected_behavior", "description": "Run login behavior tests."}],
+    }
+    def _timeout():
+        raise subprocess.TimeoutExpired(cmd=["pytest"], timeout=30)
+
+    with (
+        patch("backend.run_verifier.create_verification_plan", return_value=plan),
+        patch("backend.evidence_collector.CHECK_RUNNERS", {"expected_behavior": _timeout}),
+    ):
+        result = verify_login_fix("The login function accepts valid credentials and rejects invalid credentials.")
+
+    assert result["verdict"] == "INSUFFICIENT EVIDENCE"
+    assert result["evidence"]["passed"] is None
+    assert result["evidence"]["status"] == "timeout"
+
+
+def test_verifier_runner_error_yields_insufficient_evidence_not_contradicted():
+    """A runner exception in the verification pipeline produces INSUFFICIENT EVIDENCE, never CONTRADICTED."""
+    plan = {
+        "claim": "The login function accepts valid credentials and rejects invalid credentials.",
+        "checks": [{"id": "expected_behavior", "description": "Run login behavior tests."}],
+    }
+    def _boom():
+        raise RuntimeError("pytest runner exploded")
+
+    with (
+        patch("backend.run_verifier.create_verification_plan", return_value=plan),
+        patch("backend.evidence_collector.CHECK_RUNNERS", {"expected_behavior": _boom}),
+    ):
+        result = verify_login_fix("The login function accepts valid credentials and rejects invalid credentials.")
+
+    assert result["verdict"] == "INSUFFICIENT EVIDENCE"
+    assert result["evidence"]["passed"] is None
+    assert result["evidence"]["status"] == "runner_error"
+
+
+def test_verifier_collection_error_yields_insufficient_evidence_not_contradicted():
+    """A pytest collection error in the verification pipeline produces INSUFFICIENT EVIDENCE, never CONTRADICTED."""
+    plan = {
+        "claim": "The login function accepts valid credentials and rejects invalid credentials.",
+        "checks": [{"id": "expected_behavior", "description": "Run login behavior tests."}],
+    }
+    collection_error_evidence = {
+        "check_id": "expected_behavior",
+        "passed": None,
+        "status": "collection_error",
+        "exit_code": 2,
+        "tests_ran": False,
+        "stdout": "ERROR collecting test_login_behavior.py",
+        "stderr": "",
+        "evidence_source": "pytest",
+    }
+    with (
+        patch("backend.run_verifier.create_verification_plan", return_value=plan),
+        patch("backend.evidence_collector.CHECK_RUNNERS", {"expected_behavior": lambda: collection_error_evidence}),
+    ):
+        result = verify_login_fix("The login function accepts valid credentials and rejects invalid credentials.")
+
+    assert result["verdict"] == "INSUFFICIENT EVIDENCE"
+    assert result["evidence"]["passed"] is None
+    assert result["evidence"]["status"] == "collection_error"
+
+
+
 

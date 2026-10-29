@@ -25,27 +25,85 @@ def run_login_test():
     Kept as a standalone function for backward compatibility with existing
     tests and developer scripts.
     """
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pytest",
-            "-q",
-            "backend/tests/test_login_behavior.py",
-        ],
-        cwd=PROJECT_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=30,
-        check=False,
+    try:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pytest",
+                "-q",
+                "backend/tests/test_login_behavior.py",
+            ],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {
+            "check_id": "expected_behavior",
+            "passed": None,
+            "status": "timeout",
+            "exit_code": None,
+            "tests_ran": False,
+            "stdout": "",
+            "stderr": "Runner timed out.",
+            "evidence_source": "pytest",
+        }
+    except Exception as exc:  # noqa: BLE001
+        return {
+            "check_id": "expected_behavior",
+            "passed": None,
+            "status": "runner_error",
+            "exit_code": None,
+            "tests_ran": False,
+            "stdout": "",
+            "stderr": f"{type(exc).__name__}: {exc}",
+            "evidence_source": "pytest",
+        }
+
+    stdout = result.stdout or ""
+    stderr = result.stderr or ""
+    combined = f"{stdout}\n{stderr}"
+
+    passed_match = re.search(r"\b(\d+)\s+passed\b", stdout)
+    failed_match = re.search(r"\b(\d+)\s+failed\b", stdout)
+    error_match = re.search(r"\b(\d+)\s+error(s)?\b", stdout)
+
+    is_collection_error = bool(
+        "error collecting" in combined.lower()
+        or "errors during collection" in combined.lower()
+        or "collection error" in combined.lower()
+        or "during collection" in combined.lower()
+        or "syntaxerror" in combined.lower()
+        or "importerror" in combined.lower()
+        or "modulenotfounderror" in combined.lower()
+        or (error_match and not failed_match and not passed_match)
     )
 
-    tests_ran = "3 passed" in result.stdout
+    if result.returncode == 0 and passed_match and not is_collection_error:
+        tests_ran = True
+        passed = True
+        status = "executed"
+    elif result.returncode == 1 and failed_match and not is_collection_error:
+        tests_ran = True
+        passed = False
+        status = "executed"
+    else:
+        tests_ran = False
+        passed = None
+        if is_collection_error:
+            status = "collection_error"
+        elif result.returncode == 5:
+            status = "no_tests_collected"
+        else:
+            status = "infrastructure_error"
 
     return {
         "check_id": "expected_behavior",
-        "passed": result.returncode == 0 and tests_ran,
-        "status": "executed",
+        "passed": passed,
+        "status": status,
         "exit_code": result.returncode,
         "tests_ran": tests_ran,
         "stdout": result.stdout,
@@ -188,7 +246,7 @@ def collect_plan_evidence(plan: dict) -> list:
         except subprocess.TimeoutExpired:
             results.append({
                 "check_id": check_id,
-                "passed": False,
+                "passed": None,
                 "status": "timeout",
                 "exit_code": None,
                 "tests_ran": False,
@@ -199,7 +257,7 @@ def collect_plan_evidence(plan: dict) -> list:
         except Exception as exc:  # noqa: BLE001
             results.append({
                 "check_id": check_id,
-                "passed": False,
+                "passed": None,
                 "status": "runner_error",
                 "exit_code": None,
                 "tests_ran": False,

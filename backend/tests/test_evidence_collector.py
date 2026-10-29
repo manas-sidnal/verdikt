@@ -157,9 +157,10 @@ def test_runner_exception_is_captured_as_failure():
         results = collect_plan_evidence(plan)
     assert len(results) == 1
     result = results[0]
-    assert result["passed"] is False
+    assert result["passed"] is None
     assert result["status"] == "runner_error"
     assert "RuntimeError" in result["stderr"]
+    assert evaluate_evidence_list(results) == "INSUFFICIENT EVIDENCE"
 
 
 def test_runner_timeout_is_captured_as_failure():
@@ -175,8 +176,9 @@ def test_runner_timeout_is_captured_as_failure():
         results = collect_plan_evidence(plan)
     assert len(results) == 1
     result = results[0]
-    assert result["passed"] is False
+    assert result["passed"] is None
     assert result["status"] == "timeout"
+    assert evaluate_evidence_list(results) == "INSUFFICIENT EVIDENCE"
 
 
 def test_empty_plan_returns_empty_list():
@@ -299,4 +301,151 @@ def test_non_boolean_passed_value_yields_insufficient_evidence():
 
     evidence_zero = [{"check_id": "test", "passed": 0}]
     assert evaluate_evidence_list(evidence_zero) == "INSUFFICIENT EVIDENCE"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for evidence status handling (Requirement 6)
+# ---------------------------------------------------------------------------
+
+def test_run_login_test_collection_error_produces_passed_none():
+    """A pytest collection failure must produce passed: None and not CONTRADICTED."""
+    fake_completed = subprocess.CompletedProcess(
+        args=["pytest"],
+        returncode=2,
+        stdout="ERROR collecting backend/tests/test_login_behavior.py\nSyntaxError: invalid syntax\n1 error in 0.05s",
+        stderr="",
+    )
+    with patch("subprocess.run", return_value=fake_completed):
+        evidence = run_login_test()
+
+    assert evidence["check_id"] == "expected_behavior"
+    assert evidence["passed"] is None
+    assert evidence["status"] == "collection_error"
+    assert evidence["tests_ran"] is False
+    assert evidence["exit_code"] == 2
+    assert evaluate_evidence_list([evidence]) == "INSUFFICIENT EVIDENCE"
+
+
+def test_run_login_test_import_error_produces_passed_none():
+    """Import / module errors during collection produce passed: None."""
+    fake_completed = subprocess.CompletedProcess(
+        args=["pytest"],
+        returncode=2,
+        stdout="ERROR collecting backend/tests/test_login_behavior.py\nModuleNotFoundError: No module named 'login_app'\n1 error in 0.02s",
+        stderr="",
+    )
+    with patch("subprocess.run", return_value=fake_completed):
+        evidence = run_login_test()
+
+    assert evidence["passed"] is None
+    assert evidence["status"] == "collection_error"
+    assert evidence["tests_ran"] is False
+    assert evaluate_evidence_list([evidence]) == "INSUFFICIENT EVIDENCE"
+
+
+def test_run_login_test_assertion_failure_produces_genuine_contradiction():
+    """Completed tests with assertion failures produce passed: False and CONTRADICTED."""
+    fake_completed = subprocess.CompletedProcess(
+        args=["pytest"],
+        returncode=1,
+        stdout="F..\n=== FAILURES ===\nFAILED test_login_behavior.py::test_invalid_password_is_rejected\n1 failed, 2 passed in 0.05s",
+        stderr="",
+    )
+    with patch("subprocess.run", return_value=fake_completed):
+        evidence = run_login_test()
+
+    assert evidence["check_id"] == "expected_behavior"
+    assert evidence["passed"] is False
+    assert evidence["status"] == "executed"
+    assert evidence["tests_ran"] is True
+    assert evidence["exit_code"] == 1
+    assert evaluate_evidence_list([evidence]) == "CONTRADICTED"
+
+
+def test_run_login_test_handles_different_passed_counts():
+    """run_login_test does not hardcode '3 passed' and recognizes any passing count."""
+    fake_completed = subprocess.CompletedProcess(
+        args=["pytest"],
+        returncode=0,
+        stdout="..... [100%]\n5 passed in 0.08s",
+        stderr="",
+    )
+    with patch("subprocess.run", return_value=fake_completed):
+        evidence = run_login_test()
+
+    assert evidence["passed"] is True
+    assert evidence["status"] == "executed"
+    assert evidence["tests_ran"] is True
+    assert evaluate_evidence_list([evidence]) == "VERIFIED"
+
+
+def test_mixture_of_inconclusive_and_contradictory_evidence_produces_contradicted():
+    """Genuine contradiction takes precedence over inconclusive evidence."""
+    evidence = [
+        {"check_id": "check_timeout", "passed": None, "status": "timeout"},
+        {"check_id": "check_failed", "passed": False, "status": "executed"},
+        {"check_id": "check_error", "passed": None, "status": "runner_error"},
+        {"check_id": "check_passed", "passed": True, "status": "executed"},
+    ]
+    assert evaluate_evidence_list(evidence) == "CONTRADICTED"
+
+
+def test_mixture_of_inconclusive_and_passing_evidence_produces_insufficient_evidence():
+    """Without genuine contradiction, missing/inconclusive evidence yields INSUFFICIENT EVIDENCE."""
+    evidence = [
+        {"check_id": "check_passed", "passed": True, "status": "executed"},
+        {"check_id": "check_timeout", "passed": None, "status": "timeout"},
+    ]
+    assert evaluate_evidence_list(evidence) == "INSUFFICIENT EVIDENCE"
+
+
+def test_invalid_passwords_claim_with_collection_failure_is_not_contradicted():
+    """If the login check fails collection, 'accepts invalid passwords' is INSUFFICIENT EVIDENCE, not CONTRADICTED."""
+    fake_collection_error = {
+        "check_id": "expected_behavior",
+        "passed": None,
+        "status": "collection_error",
+        "exit_code": 2,
+        "tests_ran": False,
+        "stdout": "ERROR collecting test_login_behavior.py",
+        "stderr": "",
+        "evidence_source": "pytest",
+    }
+    plan = {
+        "claim": "The login function accepts invalid passwords.",
+        "checks": [{"id": "expected_behavior", "description": "Run login behavior tests."}],
+    }
+    with patch.dict(
+        "evidence_collector.CHECK_RUNNERS",
+        {"expected_behavior": lambda: fake_collection_error},
+        clear=True,
+    ):
+        results = collect_plan_evidence(plan)
+
+    assert len(results) == 1
+    assert results[0]["passed"] is None
+    assert evaluate_evidence_list(results) == "INSUFFICIENT EVIDENCE"
+
+
+def test_invalid_passwords_claim_with_timeout_is_not_contradicted():
+    """If the login check times out, 'accepts invalid passwords' is INSUFFICIENT EVIDENCE, not CONTRADICTED."""
+    def _slow():
+        raise subprocess.TimeoutExpired(cmd=["pytest"], timeout=30)
+
+    plan = {
+        "claim": "The login function accepts invalid passwords.",
+        "checks": [{"id": "expected_behavior", "description": "Run login behavior tests."}],
+    }
+    with patch.dict(
+        "evidence_collector.CHECK_RUNNERS",
+        {"expected_behavior": _slow},
+        clear=True,
+    ):
+        results = collect_plan_evidence(plan)
+
+    assert len(results) == 1
+    assert results[0]["passed"] is None
+    assert results[0]["status"] == "timeout"
+    assert evaluate_evidence_list(results) == "INSUFFICIENT EVIDENCE"
+
 
