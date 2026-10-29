@@ -22,7 +22,7 @@ def strip_reasoning(text: str) -> str:
     return text.strip()
 
 
-def chat(system: str, user: str, model: str | None = None, max_tokens: int = 2000) -> str:
+def chat(system: str, user: str, model: str | None = None, max_tokens: int = 6000) -> str:
     """Single chat completion on Token Factory. Returns the answer text."""
     from dotenv import load_dotenv
     from openai import OpenAI

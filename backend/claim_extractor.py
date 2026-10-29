@@ -33,7 +33,8 @@ Rules:
    - "files_changed": the agent says it changed/added/rewrote a specific source file. arg = that file's relative path.
    - "deployment_status": the agent says it deployed, released, shipped or published anything. arg = null.
 5. If a claim fits none of these, leave it out. Do not guess.
-6. Output JSON only. No markdown fences, no commentary."""
+6. Output JSON only. No markdown fences, no commentary.
+7. Do not write out your reasoning. Output the JSON object immediately."""
 
 Extractor = Callable[[str, dict], list]
 
