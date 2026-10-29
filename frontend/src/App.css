@@ -1422,3 +1422,40 @@ button:disabled {
 .verdict-hero-contradicted .verdict-hero-word { color: #f08070; }
 .verdict-hero-insufficient .verdict-hero-word { color: #d9b96a; }
 .verdict-hero-summary { margin: 0; color: #c5cad2; font-size: 15px; line-height: 1.6; }
+
+/* ---- Sidebar "Result" item: verdict-coloured dot ---- */
+.nav-dot {
+  width: 8px;
+  height: 8px;
+  margin-left: auto;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.nav-dot-verified { background: #c8f169; }
+.nav-dot-contradicted { background: #f08070; }
+.nav-dot-insufficient { background: #d9b96a; }
+@media (max-width: 720px) {
+  .nav-dot { display: none; }
+}
+
+/* ---- Compact first screen: keep the Verify button above the fold at 1080p ---- */
+.topbar { height: 56px; }
+.page-content { padding-top: 36px; }
+.hero { margin-bottom: 22px; }
+.hero-description { max-width: 680px; margin-top: 12px; }
+.verification-card { padding: 22px 25px; }
+.card-heading { margin-bottom: 18px; }
+.picker-group { margin-bottom: 16px; }
+#claim-input { height: 108px; min-height: 108px; }
+.form-footer { margin-top: 18px; padding-top: 16px; }
+
+@media (max-width: 1000px) {
+  .page-content { padding-top: 32px; }
+}
+@media (max-width: 720px) {
+  .topbar { height: 52px; }
+  .hero-description { max-width: 100%; }
+}
+
+/* ---- Leave breathing room above a section when scrolled to from the sidebar ---- */
+#result, #pipeline { scroll-margin-top: 20px; }

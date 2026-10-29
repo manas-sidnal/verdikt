@@ -5,6 +5,7 @@ import {
   ArrowUpRight,
   Check,
   CircleHelp,
+  ClipboardCheck,
   FileCheck2,
   FlaskConical,
   GitBranch,
@@ -409,9 +410,10 @@ function App() {
   const [mode, setMode] = useState<Mode>('replay')
   const [customReport, setCustomReport] = useState<string | null>(null)
   const [showHelp, setShowHelp] = useState(false)
-  const [activeNav, setActiveNav] = useState<'lab' | 'pipeline'>('lab')
+  const [activeNav, setActiveNav] = useState<'lab' | 'result' | 'pipeline'>('lab')
   const [appState, setAppState] = useState<AppState>({ phase: 'idle' })
   const resultRef = useRef<HTMLDivElement | null>(null)
+  const hasResult = appState.phase === 'success'
 
   useEffect(() => {
     let cancelled = false
@@ -429,16 +431,23 @@ function App() {
     }
   }, [])
 
+  // Highlight the sidebar item for the section nearest the top of the viewport.
   useEffect(() => {
-    const section = document.getElementById('pipeline')
-    if (!section) return
+    const visible = new Set<string>()
     const observer = new IntersectionObserver(
-      ([entry]) => setActiveNav(entry.isIntersecting ? 'pipeline' : 'lab'),
+      (entries) => {
+        for (const entry of entries) {
+          const key = (entry.target as HTMLElement).dataset.nav ?? ''
+          if (entry.isIntersecting) visible.add(key)
+          else visible.delete(key)
+        }
+        setActiveNav(visible.has('pipeline') ? 'pipeline' : visible.has('result') ? 'result' : 'lab')
+      },
       { rootMargin: '0px 0px -55% 0px' },
     )
-    observer.observe(section)
+    document.querySelectorAll('[data-nav]').forEach((element) => observer.observe(element))
     return () => observer.disconnect()
-  }, [])
+  }, [hasResult])
 
   useEffect(() => {
     if (appState.phase === 'success') {
@@ -502,6 +511,11 @@ function App() {
     history.replaceState(null, '', window.location.pathname + window.location.search)
   }
 
+  function goToResult() {
+    document.getElementById('result')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    history.replaceState(null, '', window.location.pathname + window.location.search)
+  }
+
   function goToPipeline() {
     document.getElementById('pipeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     history.replaceState(null, '', '#pipeline')
@@ -532,6 +546,21 @@ function App() {
             <Layers3 size={17} />
             <span>Agent lab</span>
           </a>
+          {appState.phase === 'success' && (
+            <a
+              className={`nav-item ${activeNav === 'result' ? 'active' : ''}`}
+              href="#result"
+              aria-current={activeNav === 'result' ? 'page' : undefined}
+              onClick={(event) => {
+                event.preventDefault()
+                goToResult()
+              }}
+            >
+              <ClipboardCheck size={17} />
+              <span>Result</span>
+              <i className={`nav-dot nav-dot-${VERDICT_KEY[appState.result.verdict]}`} aria-hidden="true" />
+            </a>
+          )}
           <a
             className={`nav-item ${activeNav === 'pipeline' ? 'active' : ''}`}
             href="#pipeline"
@@ -737,11 +766,11 @@ function App() {
             </div>
           </section>
 
-          <div ref={resultRef}>
+          <div ref={resultRef} id="result" data-nav={hasResult ? 'result' : undefined}>
             {appState.phase === 'success' && <ResultPanel result={appState.result} />}
           </div>
 
-          <section className="pipeline-section" id="pipeline">
+          <section className="pipeline-section" id="pipeline" data-nav="pipeline">
             <div className="pipeline-heading">
               <div>
                 <h2>How Verdikt works</h2>
