@@ -311,6 +311,58 @@ def test_invalid_passwords_claim_is_contradicted():
     assert "contradicting the claim" in result["evidence"]["stderr"]
 
 
+def test_contradicted_claim_with_multiple_checks_preserves_every_evidence_record():
+    """When a contradicted claim produces multiple checks (e.g. bug_reproduction and expected_behavior),
+    all_evidence must retain every check record without dropping unsupported ones."""
+    claim = "The login function accepts invalid passwords."
+    two_check_plan = {
+        "claim": claim,
+        "checks": [
+            {"id": "bug_reproduction", "description": "Attempt to reproduce invalid password acceptance."},
+            {"id": "expected_behavior", "description": "Test login credentials behavior."},
+        ],
+    }
+    with patch("backend.run_verifier.create_verification_plan", return_value=two_check_plan):
+        result = verify_login_fix(claim)
+
+    assert result["verdict"] == "CONTRADICTED"
+    assert len(result["all_evidence"]) == 2
+
+    # Check 1: bug_reproduction has no runner, preserved as passed: None
+    assert result["all_evidence"][0]["check_id"] == "bug_reproduction"
+    assert result["all_evidence"][0]["passed"] is None
+    assert result["all_evidence"][0]["status"] == "no_runner"
+
+    # Check 2: expected_behavior genuinely contradicted the claim
+    assert result["all_evidence"][1]["check_id"] == "expected_behavior"
+    assert result["all_evidence"][1]["passed"] is False
+    assert result["all_evidence"][1]["status"] == "executed"
+
+    # Legacy compatibility evidence field resolves to expected_behavior
+    assert result["evidence"]["check_id"] == "expected_behavior"
+    assert result["evidence"]["passed"] is False
+
+
+def test_plan_validation_failure_sets_explicit_status_and_diagnostic():
+    """A claim rejected by plan validation (e.g. deployment claim) safely produces
+    an explicit plan_validation_failed status and diagnostic in all_evidence."""
+    claim = "The application has been successfully deployed to production."
+    with patch(
+        "backend.run_verifier.create_verification_plan",
+        side_effect=ValueError("Bug-fix plan is missing required checks: bug_reproduction, expected_behavior"),
+    ):
+        result = verify_login_fix(claim)
+
+    assert result["verdict"] == "INSUFFICIENT EVIDENCE"
+    assert result["plan"]["checks"] == []
+    assert "Bug-fix plan is missing" in result["plan"]["error"]
+    assert len(result["all_evidence"]) == 1
+    assert result["all_evidence"][0]["check_id"] == "plan_validation_failed"
+    assert result["all_evidence"][0]["status"] == "plan_validation_failed"
+    assert result["all_evidence"][0]["passed"] is None
+    assert "Bug-fix plan is missing" in result["all_evidence"][0]["stderr"]
+
+
 def test_model_plan_missing_required_checks_returns_insufficient_evidence_safely():
     """When Nemotron returns a plan missing required checks (e.g. deployment_status for bug fix),
     the verifier must safely return INSUFFICIENT EVIDENCE and NOT raise an unhandled exception or 500."""

@@ -50,6 +50,7 @@ def verify_login_fix(claim):
             "error": str(exc),
         }
         fallback_evidence = _no_runner("plan_validation_failed")
+        fallback_evidence["status"] = "plan_validation_failed"
         fallback_evidence["stderr"] = f"Plan generation or validation failed: {exc}"
         return {
             "claim": claim,

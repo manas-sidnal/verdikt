@@ -33,16 +33,18 @@ interface PlanCheck {
 interface Plan {
   claim: string
   checks: PlanCheck[]
+  error?: string
 }
 
 interface Evidence {
   check_id: string
-  passed: boolean
-  exit_code: number
-  tests_ran: boolean
-  stdout: string
-  stderr: string
-  evidence_source: string
+  passed: boolean | null
+  status?: string
+  exit_code?: number | null
+  tests_ran?: boolean
+  stdout?: string
+  stderr?: string
+  evidence_source?: string
 }
 
 type Verdict = 'VERIFIED' | 'CONTRADICTED' | 'INSUFFICIENT EVIDENCE'
@@ -50,7 +52,8 @@ type Verdict = 'VERIFIED' | 'CONTRADICTED' | 'INSUFFICIENT EVIDENCE'
 interface VerificationResult {
   claim: string
   plan: Plan
-  evidence: Evidence
+  evidence?: Evidence
+  all_evidence?: Evidence[]
   verdict: Verdict
 }
 
@@ -137,7 +140,123 @@ function VerdictBadge({ verdict }: { verdict: Verdict }) {
   return <span className={className}>{label}</span>
 }
 
+function getEvidenceStatus(item: Evidence): {
+  badgeLabel: string
+  badgeClass: string
+  passedText: string
+  passedClass: string
+} {
+  // 1. Executed and passed
+  if (item.status === 'executed' && item.passed === true) {
+    return {
+      badgeLabel: 'Executed · Passed',
+      badgeClass: 'ev-badge ev-pass',
+      passedText: 'Yes (consistent with claim)',
+      passedClass: 'ev-pass',
+    }
+  }
+
+  // 2. Executed and contradicted the claim
+  if (item.status === 'executed' && item.passed === false) {
+    return {
+      badgeLabel: 'Executed · Contradicted',
+      badgeClass: 'ev-badge ev-fail',
+      passedText: 'No (contradicts claim)',
+      passedClass: 'ev-fail',
+    }
+  }
+
+  // 3. Not executed because no runner exists
+  if (item.status === 'no_runner' && item.check_id !== 'plan_validation_failed') {
+    return {
+      badgeLabel: 'Not executed (no runner)',
+      badgeClass: 'ev-badge ev-no-runner',
+      passedText: 'None (no runner)',
+      passedClass: 'ev-no-runner-text',
+    }
+  }
+
+  // Plan validation diagnostic
+  if (item.status === 'plan_validation_failed' || item.check_id === 'plan_validation_failed') {
+    return {
+      badgeLabel: 'Plan validation failure',
+      badgeClass: 'ev-badge ev-inconclusive',
+      passedText: 'None (plan diagnostic)',
+      passedClass: 'ev-inconclusive-text',
+    }
+  }
+
+  // 4. Inconclusive because of a timeout, collection error, or runner failure
+  if (item.status === 'timeout') {
+    return {
+      badgeLabel: 'Inconclusive (timed out)',
+      badgeClass: 'ev-badge ev-inconclusive',
+      passedText: 'None (timed out)',
+      passedClass: 'ev-inconclusive-text',
+    }
+  }
+
+  if (item.status === 'collection_error') {
+    return {
+      badgeLabel: 'Inconclusive (collection error)',
+      badgeClass: 'ev-badge ev-inconclusive',
+      passedText: 'None (collection error)',
+      passedClass: 'ev-inconclusive-text',
+    }
+  }
+
+  if (item.status === 'runner_error') {
+    return {
+      badgeLabel: 'Inconclusive (runner error)',
+      badgeClass: 'ev-badge ev-inconclusive',
+      passedText: 'None (runner exception)',
+      passedClass: 'ev-inconclusive-text',
+    }
+  }
+
+  if (item.status === 'infrastructure_error') {
+    return {
+      badgeLabel: 'Inconclusive (infra error)',
+      badgeClass: 'ev-badge ev-inconclusive',
+      passedText: 'None (infra error)',
+      passedClass: 'ev-inconclusive-text',
+    }
+  }
+
+  if (item.passed === true) {
+    return {
+      badgeLabel: 'Passed',
+      badgeClass: 'ev-badge ev-pass',
+      passedText: 'Yes',
+      passedClass: 'ev-pass',
+    }
+  }
+
+  if (item.passed === false) {
+    return {
+      badgeLabel: 'Contradicted',
+      badgeClass: 'ev-badge ev-fail',
+      passedText: 'No',
+      passedClass: 'ev-fail',
+    }
+  }
+
+  return {
+    badgeLabel: 'Inconclusive',
+    badgeClass: 'ev-badge ev-inconclusive',
+    passedText: 'None',
+    passedClass: 'ev-inconclusive-text',
+  }
+}
+
 function ResultPanel({ result }: { result: VerificationResult }) {
+  const evidenceList: Evidence[] =
+    result.all_evidence && result.all_evidence.length > 0
+      ? result.all_evidence
+      : result.evidence
+      ? [result.evidence]
+      : []
+
   return (
     <div className="result-panel" role="region" aria-label="Verification result">
       <div className="result-header">
@@ -167,43 +286,74 @@ function ResultPanel({ result }: { result: VerificationResult }) {
 
       {/* Plan */}
       <div className="result-section">
-        <div className="result-section-label">VERIFICATION PLAN · {result.plan.checks.length} checks</div>
-        <ul className="plan-checks">
-          {result.plan.checks.map((check) => (
-            <li key={check.id} className="plan-check">
-              <span className="check-id">{check.id}</span>
-              <span className="check-desc">{check.description}</span>
-            </li>
-          ))}
-        </ul>
+        <div className="result-section-label">
+          VERIFICATION PLAN · {result.plan.checks.length} {result.plan.checks.length === 1 ? 'check' : 'checks'}
+        </div>
+        {result.plan.checks.length > 0 ? (
+          <ul className="plan-checks">
+            {result.plan.checks.map((check) => (
+              <li key={check.id} className="plan-check">
+                <span className="check-id">{check.id}</span>
+                <span className="check-desc">{check.description}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <div className="plan-diagnostic">
+            <span className="plan-diagnostic-title">Plan validation diagnostic</span>
+            <p className="plan-diagnostic-desc">
+              {result.plan.error || 'The claim could not be validated against the required verification plan schema.'}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Evidence */}
       <div className="result-section">
-        <div className="result-section-label">EVIDENCE · {result.evidence.evidence_source}</div>
-        <div className="evidence-grid">
-          <div className="evidence-row">
-            <span className="evidence-key">Check</span>
-            <span className="evidence-val">{result.evidence.check_id}</span>
-          </div>
-          <div className="evidence-row">
-            <span className="evidence-key">Tests ran</span>
-            <span className="evidence-val">{result.evidence.tests_ran ? 'Yes' : 'No'}</span>
-          </div>
-          <div className="evidence-row">
-            <span className="evidence-key">Passed</span>
-            <span className={`evidence-val ${result.evidence.passed ? 'ev-pass' : 'ev-fail'}`}>
-              {result.evidence.passed ? 'Yes' : 'No'}
-            </span>
-          </div>
-          <div className="evidence-row">
-            <span className="evidence-key">Exit code</span>
-            <span className="evidence-val evidence-mono">{result.evidence.exit_code}</span>
-          </div>
+        <div className="result-section-label">
+          COLLECTED EVIDENCE · {evidenceList.length} {evidenceList.length === 1 ? 'check' : 'checks'}
         </div>
-        {result.evidence.stdout && (
-          <pre className="evidence-output">{result.evidence.stdout.trim()}</pre>
-        )}
+        <div className="evidence-list">
+          {evidenceList.map((item, index) => {
+            const status = getEvidenceStatus(item)
+            return (
+              <div key={`${item.check_id}-${index}`} className="evidence-card">
+                <div className="evidence-card-header">
+                  <span className="check-id">{item.check_id}</span>
+                  <span className={status.badgeClass}>{status.badgeLabel}</span>
+                </div>
+                <div className="evidence-grid">
+                  <div className="evidence-row">
+                    <span className="evidence-key">Source</span>
+                    <span className="evidence-val">{item.evidence_source || 'none'}</span>
+                  </div>
+                  <div className="evidence-row">
+                    <span className="evidence-key">Tests ran</span>
+                    <span className="evidence-val">{item.tests_ran ? 'Yes' : 'No'}</span>
+                  </div>
+                  <div className="evidence-row">
+                    <span className="evidence-key">Passed</span>
+                    <span className={`evidence-val ${status.passedClass}`}>
+                      {status.passedText}
+                    </span>
+                  </div>
+                  <div className="evidence-row">
+                    <span className="evidence-key">Exit code</span>
+                    <span className="evidence-val evidence-mono">
+                      {item.exit_code !== null && item.exit_code !== undefined ? item.exit_code : '—'}
+                    </span>
+                  </div>
+                </div>
+                {item.stdout && (
+                  <pre className="evidence-output">{item.stdout.trim()}</pre>
+                )}
+                {item.stderr && (
+                  <pre className="evidence-output evidence-stderr">{item.stderr.trim()}</pre>
+                )}
+              </div>
+            )
+          })}
+        </div>
       </div>
     </div>
   )

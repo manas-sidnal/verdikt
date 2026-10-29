@@ -1074,3 +1074,79 @@ button:disabled {
   overflow: auto;
   max-height: 220px;
 }
+.evidence-list {
+  display: grid;
+  gap: 12px;
+}
+.evidence-card {
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.015);
+}
+.evidence-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+.ev-badge {
+  font: 500 10px var(--mono);
+  padding: 2px 7px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+.ev-badge.ev-pass {
+  background: rgba(200, 241, 105, 0.1);
+  color: #c8f169;
+  border: 1px solid rgba(200, 241, 105, 0.25);
+}
+.ev-badge.ev-fail {
+  background: rgba(255, 60, 60, 0.08);
+  color: #f08070;
+  border: 1px solid rgba(255, 100, 80, 0.25);
+}
+.ev-badge.ev-no-runner {
+  background: rgba(139, 148, 158, 0.1);
+  color: #8b949e;
+  border: 1px solid rgba(139, 148, 158, 0.25);
+}
+.ev-badge.ev-inconclusive {
+  background: rgba(231, 184, 107, 0.08);
+  color: #d9b96a;
+  border: 1px solid rgba(231, 184, 107, 0.25);
+}
+.ev-no-runner-text {
+  color: #8b949e;
+}
+.ev-inconclusive-text {
+  color: #d9b96a;
+}
+.evidence-stderr {
+  margin-top: 8px;
+  border-color: rgba(231, 184, 107, 0.25);
+  color: #d9b96a;
+}
+.plan-diagnostic {
+  padding: 12px 14px;
+  border: 1px solid rgba(231, 184, 107, 0.25);
+  border-radius: 7px;
+  background: rgba(231, 184, 107, 0.04);
+}
+.plan-diagnostic-title {
+  display: block;
+  font: 600 10px var(--mono);
+  color: #d9b96a;
+  letter-spacing: 0.6px;
+  margin-bottom: 4px;
+  text-transform: uppercase;
+}
+.plan-diagnostic-desc {
+  margin: 0;
+  color: #a8afba;
+  font-size: 11px;
+  line-height: 1.6;
+}
