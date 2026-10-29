@@ -146,9 +146,13 @@ def changed_paths(name: str, applicable: dict[str, bytes]) -> list[str]:
     changed = []
     for rel, data in applicable.items():
         original = base / rel
-        if not original.is_file() or original.read_bytes() != data:
+        if not original.is_file() or _normalize_newlines(original.read_bytes()) != _normalize_newlines(data):
             changed.append(rel)
     return sorted(changed)
+
+
+def _normalize_newlines(data: bytes) -> bytes:
+    return data.replace(b"\r\n", b"\n")
 
 
 # ---------------------------------------------------------------------------
