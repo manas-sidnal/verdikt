@@ -11,7 +11,6 @@ import {
   Layers3,
   Loader2,
   ShieldCheck,
-  Sparkles,
   Terminal,
   X,
 } from 'lucide-react'
@@ -288,26 +287,28 @@ function RunCard({ title, run }: { title: string; run: RunSummary }) {
   )
 }
 
-function ResultPanel({ result }: { result: DemoResult }) {
+function verdictSummary(result: DemoResult): string {
+  const total = result.claims.length
+  if (total === 0) return 'No checkable claims were found in this report, so nothing could be verified.'
   const counts = countVerdicts(result.claims)
+  const parts = [`${counts.VERIFIED} of ${total} ${total === 1 ? 'claim' : 'claims'} verified`]
+  if (counts.CONTRADICTED) parts.push(`${counts.CONTRADICTED} contradicted`)
+  if (counts['INSUFFICIENT EVIDENCE']) parts.push(`${counts['INSUFFICIENT EVIDENCE']} without enough evidence`)
+  const tampered = result.integrity.passed === false ? '. The patch edited protected test files.' : '.'
+  return parts.join(', ') + tampered
+}
+
+function ResultPanel({ result }: { result: DemoResult }) {
   const tampered = result.integrity.passed === false
 
   return (
     <div className="result-panel" role="region" aria-label="Verification result">
-      <div className="result-header">
-        <div className="result-header-left">
-          <div className="section-kicker">VERIFICATION RESULT · {result.scenario_label.toUpperCase()}</div>
-          <h2>Evidence-based verdict</h2>
+      <div className={`verdict-hero verdict-hero-${VERDICT_KEY[result.verdict]}`}>
+        <div className="verdict-hero-context">
+          {result.scenario_label} · {result.mode === 'live' ? 'Live' : 'Replay'} · {result.elapsed_s}s
         </div>
-        <VerdictBadge verdict={result.verdict} />
-      </div>
-
-      <div className="summary-strip">
-        <span className="summary-item verdict-verified">{counts.VERIFIED} verified</span>
-        <span className="summary-item verdict-contradicted">{counts.CONTRADICTED} contradicted</span>
-        <span className="summary-item verdict-insufficient">{counts['INSUFFICIENT EVIDENCE']} unverifiable</span>
-        {tampered && <span className="summary-item verdict-contradicted">tests tampered</span>}
-        <span className="summary-time">{result.elapsed_s}s</span>
+        <div className="verdict-hero-word">{result.verdict}</div>
+        <p className="verdict-hero-summary">{verdictSummary(result)}</p>
       </div>
 
       <div className="prototype-note" role="note">
@@ -336,13 +337,13 @@ function ResultPanel({ result }: { result: DemoResult }) {
       )}
 
       <div className="result-section">
-        <div className="result-section-label">AGENT REPORT · CLAIMS HIGHLIGHTED BY VERDICT</div>
+        <div className="result-section-label">Agent report, claims highlighted by verdict</div>
         <ReportView report={result.report} claims={result.claims} />
       </div>
 
       <div className="result-section">
         <div className="result-section-label">
-          CLAIMS · {result.claims.length} CHECKED
+          {result.claims.length} {result.claims.length === 1 ? 'claim' : 'claims'} checked
         </div>
         {result.claims.length > 0 ? (
           <div className="evidence-list">
@@ -362,7 +363,7 @@ function ResultPanel({ result }: { result: DemoResult }) {
       </div>
 
       <div className="result-section">
-        <div className="result-section-label">TEST INTEGRITY</div>
+        <div className="result-section-label">Test integrity</div>
         <div className="claim-card">
           <div className="claim-card-head">
             <span className="check-pill">Protected test files</span>
@@ -375,7 +376,7 @@ function ResultPanel({ result }: { result: DemoResult }) {
       </div>
 
       <div className="result-section">
-        <div className="result-section-label">REAL TEST RUNS · UNPATCHED REPO VS THE AGENT'S PATCH</div>
+        <div className="result-section-label">Real test runs: unpatched repo vs the agent's patch</div>
         <div className="runs-grid">
           <RunCard title="Before (unpatched)" run={result.runs.baseline} />
           <RunCard title="After (agent's patch)" run={result.runs.patched} />
@@ -384,7 +385,7 @@ function ResultPanel({ result }: { result: DemoResult }) {
 
       {result.dropped_claims.length > 0 && (
         <div className="result-section">
-          <div className="result-section-label">REJECTED MODEL OUTPUT · {result.dropped_claims.length}</div>
+          <div className="result-section-label">Rejected model output ({result.dropped_claims.length})</div>
           <ul className="rejected-list">
             {result.dropped_claims.map((dropped, index) => (
               <li key={index}>{dropped.reason}</li>
@@ -404,10 +405,11 @@ function App() {
   const [config, setConfig] = useState<DemoConfig | null>(null)
   const [configError, setConfigError] = useState('')
   const [targetName, setTargetName] = useState('')
-  const [scenario, setScenario] = useState<ScenarioKind>('overclaim')
+  const [scenario, setScenario] = useState<ScenarioKind | null>(null)
   const [mode, setMode] = useState<Mode>('replay')
   const [customReport, setCustomReport] = useState<string | null>(null)
   const [showHelp, setShowHelp] = useState(false)
+  const [activeNav, setActiveNav] = useState<'lab' | 'pipeline'>('lab')
   const [appState, setAppState] = useState<AppState>({ phase: 'idle' })
   const resultRef = useRef<HTMLDivElement | null>(null)
 
@@ -417,7 +419,6 @@ function App() {
       .then((loaded) => {
         if (cancelled) return
         setConfig(loaded)
-        setTargetName(loaded.targets[0]?.name ?? '')
       })
       .catch((err: unknown) => {
         if (cancelled) return
@@ -429,6 +430,17 @@ function App() {
   }, [])
 
   useEffect(() => {
+    const section = document.getElementById('pipeline')
+    if (!section) return
+    const observer = new IntersectionObserver(
+      ([entry]) => setActiveNav(entry.isIntersecting ? 'pipeline' : 'lab'),
+      { rootMargin: '0px 0px -55% 0px' },
+    )
+    observer.observe(section)
+    return () => observer.disconnect()
+  }, [])
+
+  useEffect(() => {
     if (appState.phase === 'success') {
       resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
@@ -436,7 +448,9 @@ function App() {
 
   const isLoading = appState.phase === 'loading'
   const target = config?.targets.find((item) => item.name === targetName)
-  const scenarioInfo = target?.scenarios.find((item) => item.kind === scenario)
+  const scenarioInfo = scenario ? target?.scenarios.find((item) => item.kind === scenario) : undefined
+  const ready = Boolean(target && scenario)
+  const behaviorOptions = (target ?? config?.targets[0])?.scenarios ?? []
   const liveReport = mode === 'live' && customReport !== null
   const shownReport = liveReport ? customReport : (scenarioInfo?.report ?? '')
   const maxChars = config?.max_report_chars ?? 4000
@@ -468,7 +482,7 @@ function App() {
   }
 
   async function handleVerify() {
-    if (!target) return
+    if (!target || !scenario) return
     setAppState({ phase: 'loading' })
     try {
       const result = await runDemo({
@@ -483,6 +497,16 @@ function App() {
     }
   }
 
+  function goToLab() {
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+    history.replaceState(null, '', window.location.pathname + window.location.search)
+  }
+
+  function goToPipeline() {
+    document.getElementById('pipeline')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    history.replaceState(null, '', '#pipeline')
+  }
+
   const apiState = config ? 'connected' : configError ? 'offline' : 'connecting'
 
   return (
@@ -495,13 +519,28 @@ function App() {
           <span className="brand-name">Verdikt<span>.</span></span>
         </a>
 
-        <div className="nav-label">WORKSPACE</div>
-        <nav className="sidebar-nav">
-          <button className="nav-item active">
+        <nav className="sidebar-nav" aria-label="Sections">
+          <a
+            className={`nav-item ${activeNav === 'lab' ? 'active' : ''}`}
+            href="#"
+            aria-current={activeNav === 'lab' ? 'page' : undefined}
+            onClick={(event) => {
+              event.preventDefault()
+              goToLab()
+            }}
+          >
             <Layers3 size={17} />
             <span>Agent lab</span>
-          </button>
-          <a className="nav-item" href="#pipeline">
+          </a>
+          <a
+            className={`nav-item ${activeNav === 'pipeline' ? 'active' : ''}`}
+            href="#pipeline"
+            aria-current={activeNav === 'pipeline' ? 'page' : undefined}
+            onClick={(event) => {
+              event.preventDefault()
+              goToPipeline()
+            }}
+          >
             <FileCheck2 size={17} />
             <span>How it works</span>
           </a>
@@ -534,7 +573,7 @@ function App() {
               </button>
             </div>
           )}
-          <div className="sidebar-footer">BUILT FOR EVIDENCE, NOT ASSUMPTIONS.</div>
+          <div className="sidebar-footer">Built for evidence, not assumptions.</div>
         </div>
       </aside>
 
@@ -546,13 +585,12 @@ function App() {
             <strong>Agent lab</strong>
           </div>
           <div className="topbar-right">
-            <span className="environment-label"><span /> NEBIUS × NVIDIA HACKATHON</span>
+            <span className="environment-label"><span /> Nebius × NVIDIA hackathon</span>
           </div>
         </header>
 
         <div className="page-content">
           <section className="hero">
-            <div className="eyebrow"><Sparkles size={13} /> INDEPENDENT VERIFICATION FOR CODING AGENTS</div>
             <h1>Agents say it's done.<br /><span>Verdikt runs the tests.</span></h1>
             <p className="hero-description">
               Pick a buggy repo and an agent behavior. Verdikt splits the agent's report into claims and judges each one
@@ -563,11 +601,9 @@ function App() {
           <section className="verification-card">
             <div className="card-heading">
               <div>
-                <div className="section-kicker">NEW VERIFICATION</div>
                 <h2>Pick a repo and an agent</h2>
                 <p>Each repo ships with a real bug and a real test suite. The agent's patch is applied in a sandbox.</p>
               </div>
-              <div className="card-icon"><ShieldCheck size={21} /></div>
             </div>
 
             {configError && (
@@ -580,7 +616,7 @@ function App() {
             {config && (
               <>
                 <div className="picker-group">
-                  <span className="claim-label">REPOSITORY</span>
+                  <span className="claim-label">Repository</span>
                   <div className="chip-row">
                     {config.targets.map((item) => (
                       <button
@@ -596,24 +632,30 @@ function App() {
                 </div>
 
                 <div className="picker-group">
-                  <span className="claim-label">AGENT BEHAVIOR</span>
+                  <span className="claim-label">Agent behavior</span>
                   <div className="chip-row">
-                    {target?.scenarios.map((item) => (
+                    {behaviorOptions.map((item) => (
                       <button
                         key={item.kind}
                         className={`choice-chip ${item.kind === scenario ? 'active' : ''}`}
-                        disabled={isLoading}
+                        disabled={isLoading || !target}
                         onClick={() => pickScenario(item.kind)}
                       >
                         {item.label}
                       </button>
                     ))}
                   </div>
-                  <p className="scenario-blurb">{SCENARIO_BLURBS[scenario]}</p>
+                  <p className="scenario-blurb">
+                    {scenario
+                      ? SCENARIO_BLURBS[scenario]
+                      : target
+                        ? 'Choose how the agent behaves.'
+                        : 'Pick a repository first.'}
+                  </p>
                 </div>
 
                 <div className="picker-group">
-                  <span className="claim-label">CLAIM SOURCE</span>
+                  <span className="claim-label">Claim source</span>
                   <div className="mode-toggle" role="group" aria-label="Claim source">
                     <button
                       className={`mode-option ${mode === 'replay' ? 'active' : ''}`}
@@ -633,11 +675,12 @@ function App() {
                   </div>
                 </div>
 
-                <label className="claim-label" htmlFor="claim-input">AGENT'S FINAL REPORT</label>
+                <label className="claim-label" htmlFor="claim-input">Agent's final report</label>
                 <textarea
                   id="claim-input"
                   value={shownReport}
-                  readOnly={mode !== 'live'}
+                  readOnly={mode !== 'live' || !ready}
+                  placeholder="Pick a repository and an agent behavior to load the agent's report."
                   disabled={isLoading}
                   maxLength={maxChars}
                   onChange={onReportChange}
@@ -645,7 +688,9 @@ function App() {
                 />
                 <div className="input-meta">
                   <span>
-                    {mode === 'live'
+                    {!ready
+                      ? "The agent's report appears here once you pick a repository and an agent behavior."
+                      : mode === 'live'
                       ? 'Edit the report. Nemotron extracts the claims; the patch stays the same.'
                       : 'Switch to live mode to edit the report and let Nemotron extract the claims.'}
                   </span>
@@ -666,13 +711,15 @@ function App() {
                 <ShieldCheck size={14} />
                 {isLoading
                   ? 'Running tests in a sandbox. This takes a few seconds…'
-                  : 'Nothing the model writes is ever executed.'}
+                  : ready
+                    ? 'Nothing the model writes is ever executed.'
+                    : 'Pick a repository and an agent behavior to run a check.'}
               </span>
               <button
                 className="primary-button"
                 id="verify-submit-btn"
                 onClick={handleVerify}
-                disabled={isLoading || !target}
+                disabled={isLoading || !ready}
                 aria-busy={isLoading}
               >
                 {isLoading ? (
@@ -697,10 +744,8 @@ function App() {
           <section className="pipeline-section" id="pipeline">
             <div className="pipeline-heading">
               <div>
-                <div className="section-kicker">HOW VERDIKT WORKS</div>
-                <h2>Verification pipeline</h2>
+                <h2>How Verdikt works</h2>
               </div>
-              <span className="pipeline-count">4 STAGES</span>
             </div>
 
             <div className="pipeline-list">
@@ -717,7 +762,6 @@ function App() {
                       <p>{stage.description}</p>
                       <span className="stage-source">{stage.source}</span>
                     </div>
-                    <div className="stage-status ready"><Check size={12} /> ACTIVE</div>
                   </article>
                 )
               })}
@@ -728,9 +772,6 @@ function App() {
             </p>
           </section>
 
-          <footer className="page-footer">
-            <span>VERDIKT <span className="footer-separator">/</span> NEBIUS × NVIDIA HACKATHON</span>
-          </footer>
         </div>
       </section>
     </main>

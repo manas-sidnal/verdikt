@@ -20,7 +20,7 @@
   --border-strong: rgba(255, 255, 255, 0.13);
   --text: #eceef2;
   --muted: #8b929e;
-  --faint: #555d69;
+  --faint: #7b838f;
   --accent: #c8f169;
   --accent-ink: #161b0c;
   --mono: 'DM Mono', monospace;
@@ -29,6 +29,10 @@
 
 * {
   box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
@@ -64,7 +68,12 @@ button:disabled {
 }
 
 .sidebar {
-  width: 248px;
+  position: sticky;
+  top: 0;
+  width: 264px;
+  height: 100vh;
+  height: 100dvh;
+  overflow-y: auto;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -1351,3 +1360,65 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- Readability pass: larger small text, brighter dim text, wider content ---- */
+.page-content { width: min(980px, 100%); }
+
+.nav-label, .section-kicker, .claim-label, .pipeline-count, .result-section-label,
+.check-pill, .run-title { font-size: 11px; }
+.eyebrow, .stage-number, .stage-source, .stage-status, .verdict-badge, .ev-badge,
+.summary-item, .summary-time, .claim-source, .run-hash, .evidence-details summary,
+.evidence-output, .plan-diagnostic-title, .environment-label { font-size: 12px; }
+.sidebar-footer, .page-footer { font-size: 11px; }
+
+.nav-item { font-size: 14px; }
+.breadcrumbs, .connection-card strong, .help-popover { font-size: 13px; }
+.connection-card small { font-size: 12px; }
+.hero-description { font-size: 15px; }
+.card-heading p, .notice, .scenario-blurb, .choice-chip, .mode-option, .stage-copy p,
+.plan-diagnostic-desc, .claim-explain, .run-counts, .rejected-list, .primary-button { font-size: 13px; }
+.stage-title-row h3 { font-size: 14px; }
+.input-meta, .privacy-note, .pipeline-disclaimer, .prototype-note { font-size: 12px; }
+#claim-input { font-size: 14px; }
+.report-text, .claim-quote { font-size: 14.5px; }
+
+.input-meta, .stage-source, .pipeline-disclaimer, .pipeline-count, .page-footer,
+.sidebar-footer { color: #8a929e; }
+
+@media (max-width: 1000px) {
+  .sidebar { width: 224px; }
+}
+
+@media (max-width: 720px) {
+  .sidebar { width: 62px; }
+  .environment-label { font-size: 10px; }
+}
+
+/* ---- De-slop pass: sentence-case labels, verdict as the headline of a result ---- */
+.claim-label, .result-section-label {
+  font: 500 13px 'DM Sans', sans-serif;
+  letter-spacing: 0;
+  color: #c5cad2;
+}
+.result-section-label { margin-bottom: 12px; }
+.environment-label { font: 12px 'DM Sans', sans-serif; letter-spacing: 0; }
+.sidebar-footer { font: 12px 'DM Sans', sans-serif; letter-spacing: 0; }
+.nav-item { text-decoration: none; }
+.page-content { padding-bottom: 56px; }
+.pipeline-heading h2, .card-heading h2 { font-size: 22px; }
+
+.verdict-hero {
+  margin-bottom: 26px;
+  padding-bottom: 22px;
+  border-bottom: 1px solid var(--border);
+}
+.verdict-hero-context { color: var(--muted); font-size: 13px; }
+.verdict-hero-word {
+  margin: 8px 0 10px;
+  font: 600 clamp(30px, 5vw, 44px)/1.05 var(--display);
+  letter-spacing: -1.2px;
+}
+.verdict-hero-verified .verdict-hero-word { color: #c8f169; }
+.verdict-hero-contradicted .verdict-hero-word { color: #f08070; }
+.verdict-hero-insufficient .verdict-hero-word { color: #d9b96a; }
+.verdict-hero-summary { margin: 0; color: #c5cad2; font-size: 15px; line-height: 1.6; }
