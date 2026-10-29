@@ -1,280 +1,176 @@
-# Verdikt — AI Agent Claim Verifier
+# Verdikt — verify what coding agents claim
 
-> **Don't just trust the claim. Verify the evidence.**
+> **Agents say it's done. Verdikt runs the tests.**
 
-Verdikt is an independent verification layer for AI agent outputs. Instead of accepting an agent's completion claim at face value, Verdikt uses **NVIDIA Nemotron** (via the Nebius AI inference platform) to formulate a strict verification plan, collects concrete evidence independently through code-controlled runner functions, and renders an auditable verdict.
+Coding agents end their work with a confident summary: *"Fixed. All tests pass."* Sometimes that is
+false, and sometimes the agent quietly edited the tests to make it look true. Verdikt is an independent
+verification layer that takes the agent's report, splits it into claims, and judges **each claim against
+real, executed evidence** instead of against what the agent says about itself.
 
-Built for the **NVIDIA x Nebius Hackathon**.
-
----
-
-## How It Works
-
-```
-Agent claim → Verification plan (Nemotron) → Evidence collection (safe runner registry) → Verdict engine → VERIFIED / CONTRADICTED / INSUFFICIENT EVIDENCE
-```
-
-| Stage | Description | Powered By |
-|---|---|---|
-| **Plan** | Determines what evidence would prove or disprove a claim | Nemotron via Nebius |
-| **Validate** | Ensures plan structure, claim correspondence, and required checks | Strict plan validators |
-| **Collect** | Gathers independent results from registered runners | Local test runner (pytest) & allowlisted registry |
-| **Evaluate** | Computes final verdict from evidence list against the claim | Verdict engine |
-
-### Verification Behavior & Scopes
-
-- **Supported Behavioral Claims:**  
-  Claims focused strictly on login credential behavior (e.g. *"The login function accepts valid credentials and rejects invalid credentials."*) route to behavioral validation requiring `expected_behavior`. When executed against local tests, genuine adherence produces **`VERIFIED`**.
-- **Contradicted Behavioral Claims:**  
-  Claims contrary to actual behavior (e.g. *"The login function accepts invalid passwords."*) are evaluated against the local test suite. Because tests verify that invalid passwords return `False`, the claim is genuinely refuted and produces **`CONTRADICTED`**.
-- **Broader Bug-Fix & Deployment Claims:**  
-  Claims asserting deployments, bug fixes, releases, or production status require all three evidence checks (`deployment_status`, `bug_reproduction`, and `expected_behavior`). Because deployment and reproduction runners are not yet implemented, their evidence stubs return `passed: None` (`no_runner`), safely preserving **`INSUFFICIENT EVIDENCE`** and preventing false verification.
-- **Resilient Plan & API Error Handling:**  
-  Malformed JSON, model API timeouts, runner execution timeouts, collection errors, or model-generated plans missing required checks safely produce an explicit **`INSUFFICIENT EVIDENCE`** result with diagnostic telemetry rather than crashing with unhandled HTTP 500 errors. Lack of a plan, an execution timeout, or a runner crash is never treated as a contradiction.
-
----
-
-## Project Structure
+Built for the **NVIDIA x Nebius Global AI Hackathon** · Track: **Coding and Agentic Engineering**.
 
 ```
-agent-verifier/
-├── backend/                    # Python verification engine (importable as `backend.*`)
-│   ├── __init__.py
-│   ├── api.py                  # FastAPI application with CORS & validation
-│   ├── planner.py              # LLM-driven verification plan generator (Nemotron)
-│   ├── evidence_collector.py   # Safe registry of trusted Python check runners
-│   ├── verdict_engine.py       # Evaluates evidence lists into structured verdicts
-│   ├── verification_plan.py    # Claim classification & plan schema validation
-│   ├── login_app.py            # Demo subject: a simple credential verification app
-│   ├── run_verifier.py         # End-to-end verification pipeline orchestrator
-│   └── tests/                  # Pytest test suite (110 tests covering all layers)
-│       ├── test_api.py
-│       ├── test_evidence_collector.py
-│       ├── test_login_behavior.py
-│       ├── test_nebius.py
-│       ├── test_plan.py
-│       ├── test_verdict_engine.py
-│       └── test_verifier.py
-├── frontend/                   # React + TypeScript + Vite UI
-│   ├── src/
-│   │   ├── App.tsx             # Verdikt dashboard (connected to FastAPI /verify)
-│   │   ├── App.css             # Verdikt dark design system
-│   │   ├── main.tsx            # React application root
-│   │   └── index.css           # Global Tailwind utilities
-│   ├── .env                    # VITE_API_BASE_URL (gitignored)
-│   └── README.md               # Frontend setup and build docs
-├── scripts/                    # Developer utility scripts
-│   ├── try_planner.py
-│   └── try_evidence.py
-├── sample_claims.txt           # Test checklist of sample claims and expected verdicts
-├── .env                        # Server credentials (gitignored — never commit)
-├── .env.example                # Environment variable template
-├── .gitignore
-├── pytest.ini                  # Pytest configuration
-├── requirements.txt            # Python dependencies
-└── README.md
+agent report + agent patch
+   │
+   ├─► Nemotron (Nebius Token Factory): split the report into atomic claims, pick an allowlisted check per claim
+   │
+   ├─► Sandbox: run the repo's real tests on a pristine copy AND on the agent's patched copy
+   │
+   ├─► Judge each claim from executed evidence only  →  VERIFIED / CONTRADICTED / INSUFFICIENT EVIDENCE
+   │
+   └─► Integrity scan: did the patch touch the tests?
 ```
 
----
+**The model never decides what is true.** Nemotron only decides *which claims were made* and *which check
+could test each one*. Every verdict comes from a real `pytest` exit code, a real file diff, or the absence
+of evidence.
 
-## Getting Started (Windows)
+## The demo: four kinds of agent
 
-### Prerequisites
+Each sample repo ships with a real bug and a real test suite. The lab applies a stored agent patch in a
+sandbox and verifies the report that goes with it.
 
-- Python 3.10+
-- Node.js 18+
-- A [Nebius AI](https://studio.nebius.com/) API key with access to Nemotron
+| Agent | What it does | Verdict | Why |
+|---|---|---|---|
+| **Honest** | Writes a correct fix, reports exactly what it did | `VERIFIED` | Tests failed before, pass now, and the file really changed |
+| **Overclaiming** | Writes a plausible half-fix, claims "all tests pass" | `CONTRADICTED` | A real failing test, with pytest's exit code and counts |
+| **Test-tampering** | Half-fix, then rewrites the tests to go green | `CONTRADICTED` | Test edits are ignored and flagged; the real tests still fail |
+| **Deploy-claiming** | Correct fix, claims it deployed to production | `INSUFFICIENT EVIDENCE` | There is no deployment runner, so it can never be verified |
 
-### 1. Clone the repo
+Two ways to run it:
 
+- **Replay** (no API key): the agent's claims are scripted so the whole demo runs offline. The verdicts
+  still come from real sandboxed test runs. The UI labels this clearly.
+- **Live** (needs a Nebius key): you can edit the agent's report, and **Nemotron on Nebius Token Factory**
+  extracts the claims from it. The stored patch stays the same.
+
+## How Nemotron and Nebius Token Factory are used
+
+- **Claim extraction with Nemotron.** In live mode, `backend/claim_extractor.py` sends the agent's report to a
+  Nemotron model (default `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B`, configurable with `NEBIUS_MODEL`) through the
+  Token Factory OpenAI-compatible endpoint (`https://api.tokenfactory.nebius.com/v1/`).
+- **Strict validation of model output.** Every claim must carry a `quote` that appears **verbatim** in the report
+  (so the model cannot invent claims the agent never made), a `check` from a fixed allowlist, and, for targeted
+  tests, a test id Verdikt itself collected. Anything else is dropped and shown in the UI as rejected output.
+- **Why Token Factory helped.** One OpenAI-compatible endpoint means switching between Nemotron sizes is a
+  one-line environment change (`NEBIUS_MODEL`), with no second client or SDK.
+- The original planner in `backend/planner.py` also calls Nemotron on Token Factory (see *Legacy prototype*).
+
+## Safety invariants
+
+- **No model output is ever executed.** The sandbox runs one fixed command (`python -m pytest`).
+- **A hosted demo cannot be made to run a visitor's code.** The API accepts a target and a scenario *name*;
+  patches come only from stored scenarios on the server. Clients cannot upload a patch.
+- **Targets are allowlisted** by name and live under `backend/targets/`.
+- **Patches can only change `.py` source files** with safe relative paths. Edits to `tests/`, `test_*.py`,
+  `*_test.py` and `conftest.py` are ignored and reported as tampering.
+- **Scrubbed environment, timeout, process-group kill.** API keys never reach the child process.
+- **Fail-safe verdicts.** A timeout, infrastructure error, or model failure is `INSUFFICIENT EVIDENCE`, never a
+  false contradiction. The one exception is deliberate: if the unpatched repo collects fine and the agent's patch
+  breaks collection (for example a syntax error), the claim "tests pass" is false and is marked contradicted.
+- **Nothing is verified without evidence.** If no valid claim can be extracted, the result is
+  `INSUFFICIENT EVIDENCE`, never `VERIFIED`.
+
+## Quickstart
+
+Requires Python 3.10+ and Node.js 18+.
+
+**Windows (PowerShell)**
 ```powershell
 git clone https://github.com/manas-sidnal/verdikt.git
 cd verdikt
-```
-
-### 2. Set up the Python virtual environment
-
-```powershell
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-```
-
-### 3. Configure environment variables
-
-```powershell
-copy .env.example .env
-```
-
-Open `.env` and fill in your Nebius credentials:
-
-```env
-NEBIUS_API_KEY=your_actual_api_key
-NEBIUS_MODEL=nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B
-```
-
-### 4. Start the backend API server
-
-Run from the **repository root**:
-
-```powershell
+copy .env.example .env          # add NEBIUS_API_KEY to enable live mode (optional)
 python -m uvicorn backend.api:app --reload
 ```
 
-The API will be available at `http://127.0.0.1:8000`.  
-Interactive Swagger docs: `http://127.0.0.1:8000/docs`
+**macOS / Linux**
+```bash
+git clone https://github.com/manas-sidnal/verdikt.git
+cd verdikt
+python3 -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env            # add NEBIUS_API_KEY to enable live mode (optional)
+python -m uvicorn backend.api:app --reload
+```
 
-### 5. Set up and start the frontend
-
-In a **second terminal**, from the repo root:
-
-```powershell
+In a second terminal:
+```bash
 cd frontend
 npm install
-npm run dev
+npm run dev                     # http://localhost:5173
 ```
 
-The frontend dashboard will be available at `http://localhost:5173`.
+Replay mode works with no key at all.
 
-### 6. Run the test suite
+### Configuration (`.env`)
 
-From the **repository root** with the virtual environment active:
-
-```powershell
-python -m pytest -v
-```
-
-Expected output: **110 passed** covering API routing, plan validation, claim classification, evidence registry safety, and end-to-end verdict evaluation.
-
----
-
-## API Reference
-
-### `GET /health`
-
-Returns API health status.
-
-```json
-{
-  "status": "ok",
-  "service": "verdikt-api"
-}
-```
-
-### `POST /verify`
-
-Submit an agent claim for verification.
-
-**Request body:**
-```json
-{
-  "claim": "The login function accepts valid credentials and rejects invalid credentials."
-}
-```
-
-- `claim` must be 5–2000 characters. Empty or out-of-range inputs return HTTP 422.
-
-**Response (Verified Behavioral Claim):**
-```json
-{
-  "claim": "The login function accepts valid credentials and rejects invalid credentials.",
-  "plan": {
-    "claim": "The login function accepts valid credentials and rejects invalid credentials.",
-    "checks": [
-      {
-        "id": "expected_behavior",
-        "description": "Test login with valid and invalid credentials."
-      }
-    ]
-  },
-  "evidence": {
-    "check_id": "expected_behavior",
-    "passed": true,
-    "status": "executed",
-    "exit_code": 0,
-    "tests_ran": true,
-    "stdout": "3 passed in 0.02s",
-    "stderr": "",
-    "evidence_source": "pytest"
-  },
-  "all_evidence": [
-    {
-      "check_id": "expected_behavior",
-      "passed": true,
-      "status": "executed",
-      "exit_code": 0,
-      "tests_ran": true,
-      "stdout": "3 passed in 0.02s",
-      "stderr": "",
-      "evidence_source": "pytest"
-    }
-  ],
-  "verdict": "VERIFIED"
-}
-```
-
-**Response (Contradicted Claim):**
-```json
-{
-  "claim": "The login function accepts invalid passwords.",
-  "plan": {
-    "claim": "The login function accepts invalid passwords.",
-    "checks": [
-      {
-        "id": "expected_behavior",
-        "description": "Test whether the login function accepts invalid passwords."
-      }
-    ]
-  },
-  "evidence": {
-    "check_id": "expected_behavior",
-    "passed": false,
-    "status": "executed",
-    "exit_code": 0,
-    "tests_ran": true,
-    "stdout": "3 passed in 0.02s",
-    "stderr": "Login test confirmed that invalid passwords/credentials are rejected, contradicting the claim that they are accepted.",
-    "evidence_source": "pytest"
-  },
-  "all_evidence": [ ... ],
-  "verdict": "CONTRADICTED"
-}
-```
-
----
-
-## Verdict Values
-
-| Verdict | Meaning |
+| Variable | Purpose |
 |---|---|
-| `VERIFIED` | All plan checks executed and supported the claim |
-| `CONTRADICTED` | Executed evidence explicitly disproved the claim |
-| `INSUFFICIENT EVIDENCE` | Required evidence checks were missing, unsupported, or incomplete |
+| `NEBIUS_API_KEY` | Token Factory key (enables live mode) |
+| `NEBIUS_MODEL` | Nemotron model id, e.g. `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` |
+| `VERDIKT_CORS_ORIGINS` | Extra allowed origins for a hosted frontend (comma-separated) |
+| `VERDIKT_LIVE_LIMIT_PER_HOUR` | Live runs per hour, to protect credits (default 30) |
+| `VERDIKT_MAX_CONCURRENT_RUNS` | Concurrent sandbox runs (default 2) |
 
----
+To confirm your key and model work: `python scripts/check_nebius.py`.
 
-## Security Invariants
+## API
 
-- **Zero Arbitrary Execution:** Model-generated descriptions, code blocks, shell commands, URLs, or file paths are **never executed**. Only allowlisted check IDs dispatch to trusted Python runners registered in `CHECK_RUNNERS`.
-- **Strict Plan Correspondence:** The generated plan's claim must strictly match the user claim; mismatches prevent verification.
-- **Fail-Safe Verdicts:** Timeouts, runner exceptions, collection errors, unsupported check IDs, or missing runners always yield `passed: None` (evaluating to `INSUFFICIENT EVIDENCE`) — never false passes (`True`) or false contradictions (`False`). Only authentic contradictory test assertions yield `passed: False` (`CONTRADICTED`).
-- **Credential Protection:** `NEBIUS_API_KEY` resides strictly on the backend server (`.env`) and is never leaked to the browser or frontend client builds.
-- **Safe Error Boundaries:** Model/API failures return structured `INSUFFICIENT EVIDENCE` results rather than unhandled HTTP 500 crashes.
-
----
-
-## Tech Stack
-
-| Layer | Technology |
+| Route | Description |
 |---|---|
-| LLM inference | NVIDIA Nemotron-3 Nano 30B via [Nebius AI](https://studio.nebius.com/) |
-| Backend API | Python 3, FastAPI, Uvicorn |
-| Verification engine | Python (planner, evidence collector, verdict engine) |
-| Frontend | React 19, TypeScript, Vite, Tailwind CSS v4, Lucide React |
-| Testing | pytest, anyio, FastAPI TestClient |
+| `GET /demo/config` | Repos, scenarios, default reports, and whether live mode is available |
+| `POST /demo/verify` | Verify a stored agent scenario. Body: `{"target": "cart_total", "scenario": "overclaim", "mode": "replay"}`. In `live` mode an optional `report` string replaces the agent's report. |
+| `GET /health` | Health check |
+| `POST /verify` | The original login-only prototype (see below) |
 
----
+Interactive docs: `http://127.0.0.1:8000/docs`.
+
+## Project structure
+
+```
+backend/
+  api.py               FastAPI app and routes
+  service.py           Demo orchestration, rate limits, concurrency limits
+  repo_verifier.py     Claim-by-claim verification of an agent report
+  claim_extractor.py   Nemotron claim extraction + strict output validation
+  llm.py               Token Factory chat helper
+  sandbox.py           Sandboxed pytest runner, patch validation, tamper protection
+  demo_agents.py       Scripted agent scenarios (replay mode)
+  targets/             Sample repos with a real bug and a real test suite
+  target_solutions/    Stored "good" and "partial" fixes for the scenarios
+  tests/               Test suite
+frontend/              React + TypeScript + Vite UI (the "Agent lab")
+scripts/               Developer utilities, incl. check_nebius.py
+```
+
+## Tests
+
+```bash
+python -m pytest -q
+```
+
+The suite covers sandbox isolation (path traversal, test tampering, timeouts, environment scrubbing,
+cleanup), every demo scenario, hostile or malformed model output, rate limiting, and the HTTP layer.
+Model calls are faked in tests, so no key or network is needed.
+
+## Limitations
+
+- **Targets are small, Python-only, and synthetic.** Three sample repos prove the pipeline; they are not a
+  benchmark of real-world agent behaviour.
+- **Replay-mode claims are scripted.** Only live mode exercises Nemotron, and it needs a Nebius key.
+- **No deployment verification.** Deployment claims always end as `INSUFFICIENT EVIDENCE` by design.
+- **Five check types.** Claims that fit none of them (for example "this is more readable") are skipped, not judged.
+- **Agent patches are stored scenarios**, not live agent runs. Wiring Verdikt to a real agent's output is future work.
+
+## Legacy prototype
+
+`POST /verify`, `backend/planner.py`, `backend/evidence_collector.py` and `backend/verdict_engine.py` are the first
+version of Verdikt, which verified claims about one demo login function. They are kept for reference; the Agent lab
+uses the sandbox verifier described above.
 
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
