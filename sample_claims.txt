@@ -1,5 +1,7 @@
-VERDIKT — SAMPLE CLAIMS
-=======================
+VERDIKT — SAMPLE CLAIMS (legacy login prototype, POST /verify)
+==============================================================
+
+These claims belong to the first prototype. The Agent lab UI does not use them.
 
 Use these one at a time in the Verdikt claim box. Expected verdicts assume the current demo login implementation and its three pytest checks are unchanged. The model-generated plan can affect the exact result, so treat this as a test checklist, not a guarantee.
 

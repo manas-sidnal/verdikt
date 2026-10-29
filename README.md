@@ -112,7 +112,8 @@ Replay mode works with no key at all.
 | `NEBIUS_API_KEY` | Token Factory key (enables live mode) |
 | `NEBIUS_MODEL` | Nemotron model id, e.g. `nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B` |
 | `VERDIKT_CORS_ORIGINS` | Extra allowed origins for a hosted frontend (comma-separated) |
-| `VERDIKT_LIVE_LIMIT_PER_HOUR` | Live runs per hour, to protect credits (default 30) |
+| `NEBIUS_BASE_URL` | Optional. Override the Token Factory endpoint (default `https://api.tokenfactory.nebius.com/v1/`) |
+| `VERDIKT_LIVE_LIMIT_PER_HOUR` | Model-backed runs per hour (Live mode and the legacy `/verify` route), to protect credits (default 30) |
 | `VERDIKT_MAX_CONCURRENT_RUNS` | Concurrent sandbox runs (default 2) |
 
 To confirm your key and model work: `python scripts/check_nebius.py`.
@@ -124,7 +125,7 @@ To confirm your key and model work: `python scripts/check_nebius.py`.
 | `GET /demo/config` | Repos, scenarios, default reports, and whether live mode is available |
 | `POST /demo/verify` | Verify a stored agent scenario. Body: `{"target": "cart_total", "scenario": "overclaim", "mode": "replay"}`. In `live` mode an optional `report` string replaces the agent's report. |
 | `GET /health` | Health check |
-| `POST /verify` | The original login-only prototype (see below) |
+| `POST /verify` | The original login-only prototype (see *Legacy prototype*). Calls Nemotron, so it shares the hourly model-call limit. |
 
 Interactive docs: `http://127.0.0.1:8000/docs`.
 
@@ -142,7 +143,7 @@ backend/
   targets/             Sample repos with a real bug and a real test suite
   target_solutions/    Stored "good" and "partial" fixes for the scenarios
   tests/               Test suite
-frontend/              React + TypeScript + Vite UI (the "Agent lab")
+frontend/              React + TypeScript + Vite UI (the "Agent lab"); see frontend/README.md
 scripts/               Developer utilities, incl. check_nebius.py
 ```
 
@@ -169,7 +170,7 @@ Model calls are faked in tests, so no key or network is needed.
 
 `POST /verify`, `backend/planner.py`, `backend/evidence_collector.py` and `backend/verdict_engine.py` are the first
 version of Verdikt, which verified claims about one demo login function. They are kept for reference; the Agent lab
-uses the sandbox verifier described above.
+uses the sandbox verifier described above. `sample_claims.txt` is the manual checklist for that prototype.
 
 ## License
 

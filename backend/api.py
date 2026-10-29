@@ -53,6 +53,9 @@ def health_check():
 
 @app.post("/verify")
 def verify_claim(request: VerificationRequest):
+    # This route calls the model, so it shares the hourly budget that protects credits.
+    if not service.allow_model_call():
+        raise HTTPException(status_code=429, detail="Rate limit reached. Try again later.")
     try:
         result = verify_login_fix(request.claim)
         return result

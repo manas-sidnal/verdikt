@@ -90,6 +90,11 @@ def reset_limits_for_tests(live_limit: int = 30, slots: int = 2) -> None:
     _run_slots = threading.BoundedSemaphore(slots)
 
 
+def allow_model_call() -> bool:
+    """Spend one unit of the hourly model-call budget (Live mode and the legacy /verify route)."""
+    return _live_limiter.allow()
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
